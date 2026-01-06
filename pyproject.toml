@@ -3,13 +3,14 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "my-package"
+name = "evc"
 version = "0.1.0"
-description = "A short description of my package"
+description = "EVC (Ersilia Version Control) is a Python-based tool designed to unify code versioning with data and result management by combining Git and S3 workflows around the main branch. "
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-  {name="Your Name", email="you@ersilia.io"}
+  {name="Abel Legese", email="abel@ersilia.io"},
+  {name="Miquel Frigola", email="miquel@ersilia.io"}
 ]
 requires-python = ">=3.10"
 
