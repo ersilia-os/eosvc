@@ -66,7 +66,7 @@ eosvc --help
 
 ## Credentials (env vars only)
 
-EOSVC **will not** read AWS credentials from:
+EOSVC **will ** read AWS credentials from:
 
 * `~/.aws/credentials`
 * `~/.aws/config`
@@ -81,6 +81,14 @@ It only reads from environment variables.
 export AWS_ACCESS_KEY_ID="..."
 export AWS_SECRET_ACCESS_KEY="..."
 ```
+### Option B (standard AWS env vars in .env file)
+
+```bash
+#.env
+AWS_ACCESS_KEY_ID="..."
+AWS_SECRET_ACCESS_KEY="..."
+```
+
 ---
 
 ## access.json (required after clone)
@@ -102,7 +110,8 @@ Valid values are: `"public"` or `"private"`.
 
 ```json
 {
-  "model": "public"
+  "checkpoints": "public",
+  "framework": "public" # fit folder is abstracted
 }
 ```
 
