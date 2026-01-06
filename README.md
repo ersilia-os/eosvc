@@ -32,7 +32,7 @@ If the repo is a **model repo**, EVC **only** manages:
 Mapping example (`my-model-repo`):
 
 - `s3://<bucket>/my-model-repo/model/checkpoints/...`
-- `s3://<bucket>/my-model-repo/model/framework/framework/...`
+- `s3://<bucket>/my-model-repo/model/framework/git/...`
 
 In model repos, EVC refuses operations on `data/`, `output/`
 
