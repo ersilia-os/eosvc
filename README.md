@@ -4,7 +4,7 @@ EOSVC is a small CLI for syncing large artifacts to **S3**, while your code rema
 
 EOSVC supports two repo types (detected from `access.json`):
 - **Standard repos**: manage `data/` and `output/`
-- **Model repos**: manage `model/checkpoints/` and `model/eu-central-2/fit/`
+- **Model repos**: manage `model/checkpoints/` and `model/fit/`
 
 EOSVC **does not** manage Git operations anymore (no clone/pull/push). Use `git` directly for code workflows.
 
