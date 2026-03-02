@@ -1,4 +1,4 @@
-# EOSVC (Ersilia Version Control)
+# Ersilia Version Control
 
 EOSVC is a small CLI for syncing large artifacts to **S3**, while your code remains in **Git**.
 
