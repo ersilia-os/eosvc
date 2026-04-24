@@ -11,7 +11,7 @@ OUTPUT_ROOT = "output"
 
 MODEL_ROOT = "model"
 MODEL_CHECKPOINTS = "model/checkpoints"
-MODEL_FRAMEWORK_FIT = "model/fit"
+MODEL_FRAMEWORK_FIT = "model/framework/fit"
 
 EOSVC_META_DIR = ".eosvc"
 ACCESS_LOCK_FILE = "access.lock.json"

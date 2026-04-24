@@ -227,7 +227,7 @@ def normalize_user_path(path, mode):
     """Normalise a user-supplied path to its canonical internal form.
 
     For standard repos, validates the root is 'data/' or 'output/'.
-    For model repos, accepts 'model/checkpoints/...', 'model/fit/...', 'checkpoints/...', or
+    For model repos, accepts 'model/checkpoints/...', 'model/framework/fit/...', 'checkpoints/...', or
     'fit/...' and normalises all short forms to their full 'model/...' equivalents.
 
     Args:

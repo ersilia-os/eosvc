@@ -172,19 +172,19 @@ class TestNormalizeUserPathModel:
         assert normalize_user_path("model/checkpoints/run1", "model") == "model/checkpoints/run1"
 
     def test_full_fit_path(self):
-        assert normalize_user_path("model/fit/v1", "model") == "model/fit/v1"
+        assert normalize_user_path("model/framework/fit/v1", "model") == "model/framework/fit/v1"
 
     def test_short_checkpoints_expanded(self):
         assert normalize_user_path("checkpoints/run1", "model") == "model/checkpoints/run1"
 
     def test_short_fit_expanded(self):
-        assert normalize_user_path("fit/v1", "model") == "model/fit/v1"
+        assert normalize_user_path("fit/v1", "model") == "model/framework/fit/v1"
 
     def test_checkpoints_root_only(self):
         assert normalize_user_path("checkpoints", "model") == "model/checkpoints"
 
     def test_fit_root_only(self):
-        assert normalize_user_path("fit", "model") == "model/fit"
+        assert normalize_user_path("fit", "model") == "model/framework/fit"
 
     def test_empty_raises(self):
         with pytest.raises(EOSVCError):
@@ -218,7 +218,7 @@ class TestCategoryForPath:
         assert category_for_path("model/checkpoints/run1", "model") == "checkpoints"
 
     def test_fit_category(self):
-        assert category_for_path("model/fit/v1", "model") == "fit"
+        assert category_for_path("model/framework/fit/v1", "model") == "fit"
 
     def test_model_mode_invalid_raises(self):
         with pytest.raises(EOSVCError):

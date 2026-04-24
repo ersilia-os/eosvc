@@ -90,9 +90,9 @@ JSON
 make_dummy_files_model() {
   local repo_dir="$1"
   mkdir -p "${repo_dir}/model/checkpoints/test-run"
-  mkdir -p "${repo_dir}/model/fit/test-fit"
+  mkdir -p "${repo_dir}/model/framework/fit/test-fit"
   echo "checkpoint blob" > "${repo_dir}/model/checkpoints/test-run/ckpt.txt"
-  echo "fit blob" > "${repo_dir}/model/fit/test-fit/fw.txt"
+  echo "fit blob" > "${repo_dir}/model/framework/fit/test-fit/fw.txt"
 }
 
 make_dummy_files_standard() {
@@ -126,12 +126,12 @@ main() {
   header "MODEL: view"
   ( cd eosdev && run "$EVC" view )
   ( cd eosdev && run "$EVC" view --path model/checkpoints )
-  ( cd eosdev && run "$EVC" view --path model/fit )
+  ( cd eosdev && run "$EVC" view --path model/framework/fit )
 
   header "MODEL: upload (specific paths)"
   make_dummy_files_model "eosdev"
   ( cd eosdev && run "$EVC" upload --path model/checkpoints/test-run )
-  ( cd eosdev && run "$EVC" upload --path model/fit/test-fit )
+  ( cd eosdev && run "$EVC" upload --path model/framework/fit/test-fit )
   ( cd eosdev && run "$EVC" upload --path checkpoints/test-run )
   ( cd eosdev && run "$EVC" upload --path fit/test-fit )
 

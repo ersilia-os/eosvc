@@ -5,7 +5,7 @@ from botocore import UNSIGNED
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-from eosvc.constants import EOSVCError, BUCKET_PUBLIC
+from eosvc.constants import EOSVCError, BUCKET_PUBLIC, BUCKET_MODELS_PUBLIC
 from eosvc.credentials import CREDS, env_region
 from eosvc.logger import logger
 
@@ -38,11 +38,8 @@ def s3_for_read(bucket, repo_dir):
     Raises:
         EOSVCError: If the bucket is private and no credentials are found.
     """
-    if bucket == BUCKET_PUBLIC:
-        session, _, _ = CREDS.resolve(repo_dir=repo_dir, require=False)
-        if session is None:
-            return s3_unsigned()
-        return session.client("s3", region_name=env_region())
+    if bucket in (BUCKET_PUBLIC, BUCKET_MODELS_PUBLIC):
+        return s3_unsigned()
     session, _, _ = CREDS.resolve(repo_dir=repo_dir, require=True)
     return session.client("s3", region_name=env_region())
 
