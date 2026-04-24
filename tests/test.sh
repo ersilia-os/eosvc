@@ -24,6 +24,22 @@ run_may_fail() {
   return 0
 }
 
+# Assert that a command exits with code 2 (EOSVCError).
+expect_fail() {
+  echo
+  echo "==> [expect failure] $*"
+  set +e
+  "$@"
+  local rc=$?
+  set -e
+  if [ $rc -eq 2 ]; then
+    echo "PASS: command failed with exit 2 as expected"
+  else
+    echo "FAIL: expected exit 2, got $rc — command: $*" >&2
+    exit 1
+  fi
+}
+
 header() {
   echo
   echo "############################################################"
@@ -74,9 +90,9 @@ JSON
 make_dummy_files_model() {
   local repo_dir="$1"
   mkdir -p "${repo_dir}/model/checkpoints/test-run"
-  mkdir -p "${repo_dir}/model/fit/fit/test-fit"
+  mkdir -p "${repo_dir}/model/fit/test-fit"
   echo "checkpoint blob" > "${repo_dir}/model/checkpoints/test-run/ckpt.txt"
-  echo "fit blob" > "${repo_dir}/model/fit/fit/test-fit/fw.txt"
+  echo "fit blob" > "${repo_dir}/model/fit/test-fit/fw.txt"
 }
 
 make_dummy_files_standard() {
@@ -115,7 +131,7 @@ main() {
   header "MODEL: upload (specific paths)"
   make_dummy_files_model "eosdev"
   ( cd eosdev && run "$EVC" upload --path model/checkpoints/test-run )
-  ( cd eosdev && run "$EVC" upload --path model/fit/fit/test-fit )
+  ( cd eosdev && run "$EVC" upload --path model/fit/test-fit )
   ( cd eosdev && run "$EVC" upload --path checkpoints/test-run )
   ( cd eosdev && run "$EVC" upload --path fit/test-fit )
 
@@ -157,6 +173,35 @@ main() {
 
   header "STANDARD: download (all managed roots via --path .)"
   ( cd evc-dev-analysis && run_may_fail "$EVC" download --path . )
+
+  header "3) NEGATIVE CASES"
+
+  # 3a. No access.json — eosvc should exit 2
+  local no_access_dir
+  no_access_dir="$(mktemp -d)"
+  expect_fail "$EVC" view --path data
+  # run from the temp dir where no access.json exists anywhere up the tree
+  ( cd "$no_access_dir" && expect_fail "$EVC" view )
+  rm -rf "$no_access_dir"
+
+  # 3b. Invalid --path for standard repo — eosvc should exit 2
+  local bad_path_dir
+  bad_path_dir="$(mktemp -d)"
+  write_access_json_standard "$bad_path_dir"
+  ( cd "$bad_path_dir" && expect_fail "$EVC" upload --path invalid/path )
+  rm -rf "$bad_path_dir"
+
+  # 3c. Mixed standard + model keys in access.json — eosvc should exit 2
+  local mixed_dir
+  mixed_dir="$(mktemp -d)"
+  cat > "${mixed_dir}/access.json" <<'JSON'
+{
+  "data": "public",
+  "checkpoints": "public"
+}
+JSON
+  ( cd "$mixed_dir" && expect_fail "$EVC" view )
+  rm -rf "$mixed_dir"
 
   header "DONE"
   echo "All commands executed."
