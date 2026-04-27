@@ -4,7 +4,7 @@ EOSVC is a small CLI for syncing large artifacts to **S3**, while your code rema
 
 EOSVC supports two repo types (detected from `access.json`):
 - **Standard repos**: manage `data/` and `output/`
-- **Model repos**: manage `model/checkpoints/` and `model/fit/`
+- **Model repos**: manage `model/checkpoints/` and `model/framework/fit/`
 
 EOSVC **does not** manage Git operations anymore (no clone/pull/push). Use `git` directly for code workflows.
 
@@ -118,17 +118,17 @@ S3 mapping for repo `ersilia-repo`:
 Managed roots:
 
 * `model/checkpoints/`
-* `model/fit/`
+* `model/framework/fit/`
 
 Accepted path aliases for convenience:
 
 * `checkpoints/...` → `model/checkpoints/...`
-* `fit/...` → `model/fit/...`
+* `fit/...` → `model/framework/fit/...`
 
 S3 mapping for repo `my-model-repo`:
 
 * `s3://<bucket>/my-model-repo/model/checkpoints/...`
-* `s3://<bucket>/my-model-repo/model/fit/...`
+* `s3://<bucket>/my-model-repo/model/framework/fit/...`
 
 In model repos, EOSVC refuses operations on `data/` and `output/`.
 
@@ -138,16 +138,20 @@ In model repos, EOSVC refuses operations on `data/` and `output/`.
 
 Buckets:
 
-* Public bucket: `eosvc-public`
-* Private bucket: `eosvc-private`
+| Bucket | Used by | Access |
+|---|---|---|
+| `eosvc-public` | Standard repos (`data`, `output`) | Public |
+| `eosvc-private` | Standard repos (`data`, `output`) | Private |
+| `eosvc-models-public` | Model repos (`checkpoints`, `fit`) | Public |
+| `eosvc-models-private` | Model repos (`checkpoints`, `fit`) | Private |
 
 Rules:
 
-* **Read from `eosvc-public` may work without AWS credentials** (unsigned S3 client).
-* **Read from `eosvc-private` requires AWS credentials**.
+* **Read from `eosvc-public` or `eosvc-models-public` may work without AWS credentials** (unsigned S3 client).
+* **Read from `eosvc-private` or `eosvc-models-private` requires AWS credentials**.
 * **Any upload requires AWS credentials**, regardless of bucket.
 
-> Note: For unauthenticated reads to work, the `eosvc-public` bucket policy must allow `s3:GetObject`.
+> Note: For unauthenticated reads to work, the public bucket policy must allow `s3:GetObject`.
 > For unauthenticated `view` to work, it must also allow `s3:ListBucket` constrained to the relevant prefixes.
 
 ---
@@ -168,12 +172,15 @@ eosvc --help
 
 EOSVC resolves credentials in this order:
 
-1. Standard AWS resolution (environment variables and/or `~/.aws/*` if present)
-2. `.env` files (loaded with `python-dotenv`) from:
+1. `.env` files (loaded with `python-dotenv`) from:
 
-   * `~/.eosvc/.env`
-   * `<repo>/.env`
-   * `./.env`
+   * `<repo>/.config/.env` and `<repo>/.config/eosvc/.env`
+   * `./.config/.env` and `./.config/eosvc/.env`
+   * `~/.eosvc/.config` (written by `eosvc config`)
+   * `<repo>/.env` and `./.env`
+
+2. AWS default credential chain (environment variables and/or `~/.aws/*` if present)
+3. Falls back to anonymous — only valid for reads from public buckets
 
 ### Option A: environment variables (standard AWS)
 
@@ -184,11 +191,11 @@ export AWS_SESSION_TOKEN="..."   # optional
 export AWS_REGION="eu-central-2"     # optional
 ```
 
-### Option B: EOSVC config (writes ~/.eosvc/.env)
+### Option B: EOSVC config (writes ~/.eosvc/.config)
 
 EOSVC provides a `config` command to store credentials in:
 
-* `~/.eosvc/.env` (permissions set to `600` when possible)
+* `~/.eosvc/.config` (permissions set to `600` when possible)
 
 ```bash
 eosvc config \
@@ -244,7 +251,7 @@ Valid values are: `"public"` or `"private"`.
 
 ### config
 
-Write AWS credentials to `~/.eosvc/.env`:
+Write AWS credentials to `~/.eosvc/.config`:
 
 ```bash
 eosvc config --access-key-id "..." --secret-access-key "..."
@@ -270,6 +277,7 @@ eosvc view
 eosvc view --path data
 eosvc view --path output
 eosvc view --path model/checkpoints
+eosvc view --path model/framework/fit
 eosvc view --path checkpoints
 eosvc view --path fit
 ```
@@ -282,6 +290,7 @@ Download a file or folder from S3 into your repo:
 eosvc download --path data/processed/file.csv
 eosvc download --path output/
 eosvc download --path model/checkpoints/
+eosvc download --path model/framework/fit/
 eosvc download --path checkpoints/
 eosvc download --path fit/
 ```
@@ -294,6 +303,7 @@ Upload a file or folder to S3 (requires credentials):
 eosvc upload --path output/some_folder
 eosvc upload --path data/test
 eosvc upload --path model/checkpoints/test-run
+eosvc upload --path model/framework/fit/test-fit
 eosvc upload --path checkpoints/test-run
 eosvc upload --path fit/test-fit
 ```
@@ -335,11 +345,11 @@ rm .eosvc/access.lock.json
 
 ## Common troubleshooting
 
-### “AccessDenied” when reading eosvc-public without creds
+### “AccessDenied” when reading a public bucket without creds
 
 Your bucket policy probably does not allow anonymous access for the prefixes EOSVC uses.
 
-If you want unauthenticated `download` to work:
+For **standard repos** (`eosvc-public`), if you want unauthenticated `download` to work:
 
 * allow `s3:GetObject` on `arn:aws:s3:::eosvc-public/*`
 
@@ -348,13 +358,15 @@ If you want unauthenticated `view` to work:
 * also allow `s3:ListBucket` on `arn:aws:s3:::eosvc-public`
 * restrict with `s3:prefix` conditions for your repo prefixes
 
+For **model repos** (`eosvc-models-public`), apply the same policy to `arn:aws:s3:::eosvc-models-public`.
+
 ### “AWS credentials are missing or invalid”
 
 Provide credentials via:
 
 * env vars, or
-* `eosvc config` (writes `~/.eosvc/.env`), or
-* a `.env` file in the repo/current directory
+* `eosvc config` (writes `~/.eosvc/.config`), or
+* a `.env` file in the repo/current directory or its `.config/` subdirectory
 
 ---
 
