@@ -14,7 +14,7 @@ authors = [
   {name="Marina Miñarro-Lleonar", email="marina@ersilia.io"},
   {name="Ersilia Open Source Initiative", email="hello@ersilia.io"}
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 
 dependencies = [
   "loguru",
