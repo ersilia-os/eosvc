@@ -313,8 +313,6 @@ eosvc download --path data/processed/file.csv
 eosvc download --path output/
 eosvc download --path model/checkpoints/
 eosvc download --path model/framework/fit/
-eosvc download --path checkpoints/
-eosvc download --path fit/
 ```
 
 ### upload
@@ -326,8 +324,6 @@ eosvc upload --path output/some_folder
 eosvc upload --path data/test
 eosvc upload --path model/checkpoints/test-run
 eosvc upload --path model/framework/fit/test-fit
-eosvc upload --path checkpoints/test-run
-eosvc upload --path fit/test-fit
 ```
 
 ### delete
