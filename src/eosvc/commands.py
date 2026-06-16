@@ -18,8 +18,14 @@ from eosvc.s3 import (
   s3_for_write,
   s3_download_path,
   s3_upload_path,
-  s3_print_tree,
-  s3_list_keys,
+  s3_list_objects,
+)
+from eosvc.view import (
+  local_files_map,
+  remote_files_map,
+  diff_entries,
+  render_diff_tree,
+  print_legend,
 )
 
 
@@ -183,17 +189,35 @@ def cmd_view(args):
   ensure_access_lock(repo_dir, policy, mode)
   repo = repo_name(repo_dir)
 
+  print_legend(logger.console)
+
   rel_path = (args.path or ".").strip().lstrip("/")
   if rel_path in {"", "."}:
+    totals = []
     for rel_dir, cat in artifacts_plan(mode):
       bucket = policy.bucket_for(cat)
       if bucket == BUCKET_PRIVATE:
         CREDS.resolve(repo_dir=repo_dir, require=True)
       client = s3_for_read(bucket, repo_dir)
       prefix = f"{repo}/{rel_dir}/"
-      logger.info(f"[{rel_dir}] s3://{bucket}/{prefix}")
-      s3_print_tree(s3_list_keys(client, bucket, prefix), prefix)
-      logger.info("")
+      objects = s3_list_objects(client, bucket, prefix)
+      remote = remote_files_map(objects, f"{repo}/")
+      local = local_files_map(repo_dir, rel_dir)
+      entries = diff_entries(local, remote)
+      counts = render_diff_tree(
+        logger.console,
+        f"{rel_dir}  (s3://{bucket}/{repo}/)",
+        entries,
+        strip=rel_dir,
+        max_depth=args.max_depth,
+      )
+      totals.append(counts)
+    differ = sum(c["differ"] for c in totals)
+    same = sum(c["same size"] for c in totals)
+    logger.console.print()
+    logger.console.print(
+      f"[bold]Summary:[/bold] {differ} differ · {same} same size across {len(totals)} categories"
+    )
     return
 
   rel_path = normalize_user_path(rel_path, mode)
@@ -202,6 +226,16 @@ def cmd_view(args):
   if bucket == BUCKET_PRIVATE:
     CREDS.resolve(repo_dir=repo_dir, require=True)
   client = s3_for_read(bucket, repo_dir)
-  prefix = f"{repo}/{rel_path.rstrip('/')}/"
-  logger.info(f"s3://{bucket}/{prefix}")
-  s3_print_tree(s3_list_keys(client, bucket, prefix), prefix)
+  rel_dir = rel_path.rstrip("/")
+  prefix = f"{repo}/{rel_dir}/"
+  objects = s3_list_objects(client, bucket, prefix)
+  remote = remote_files_map(objects, f"{repo}/")
+  local = local_files_map(repo_dir, rel_dir)
+  entries = diff_entries(local, remote)
+  render_diff_tree(
+    logger.console,
+    f"{rel_dir}  (s3://{bucket}/{repo}/)",
+    entries,
+    strip=rel_dir,
+    max_depth=args.max_depth,
+  )

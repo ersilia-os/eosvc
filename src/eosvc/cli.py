@@ -39,6 +39,12 @@ def build_parser():
     default=".",
     help="Relative path to inspect. Defaults to '.' (all managed directories).",
   )
+  p_view.add_argument(
+    "--max-depth",
+    type=int,
+    default=None,
+    help="Limit tree depth; folders deeper than this are collapsed to a rollup. Default: unlimited.",
+  )
   p_view.set_defaults(func=cmd_view)
 
   return p

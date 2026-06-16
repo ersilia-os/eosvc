@@ -95,10 +95,10 @@ def s3_list_keys(client, bucket, prefix):
 
 
 def s3_list_objects(client, bucket, prefix):
-  """List all S3 objects under prefix as (key, size) pairs, paginating automatically.
+  """List all S3 objects under prefix, paginating automatically.
 
-  Like s3_list_keys but also returns each object's size in bytes (used to drive
-  transfer progress).
+  Like s3_list_keys but also returns each object's size and upload date (used to
+  drive transfer progress and the local/remote diff in `view`).
 
   Args:
       client: Boto3 S3 client.
@@ -106,7 +106,8 @@ def s3_list_objects(client, bucket, prefix):
       prefix: Key prefix to list.
 
   Returns:
-      List of (key, size) tuples.
+      List of dicts with keys 'key' (str), 'size' (int), and 'last_modified'
+      (tz-aware datetime or None).
 
   Raises:
       EOSVCError: On S3 API errors.
@@ -120,7 +121,11 @@ def s3_list_objects(client, bucket, prefix):
         kwargs["ContinuationToken"] = token
       resp = client.list_objects_v2(**kwargs)
       for obj in resp.get("Contents") or []:
-        objects.append((obj["Key"], obj.get("Size", 0)))
+        objects.append({
+          "key": obj["Key"],
+          "size": obj.get("Size", 0),
+          "last_modified": obj.get("LastModified"),
+        })
       if not resp.get("IsTruncated"):
         break
       token = resp.get("NextContinuationToken")
@@ -152,12 +157,16 @@ def s3_download_path(client, bucket, repo_prefix, rel_path, repo_dir):
 
   # Build the list of objects to download (key, size), trying the exact file
   # first, then falling back to a directory prefix.
-  exact = [(k, s) for k, s in s3_list_objects(client, bucket, file_key) if k == file_key]
+  exact = [
+    (o["key"], o["size"]) for o in s3_list_objects(client, bucket, file_key) if o["key"] == file_key
+  ]
   if exact:
     objects = exact
   else:
     objects = [
-      (k, s) for k, s in s3_list_objects(client, bucket, dir_prefix) if not k.endswith("/")
+      (o["key"], o["size"])
+      for o in s3_list_objects(client, bucket, dir_prefix)
+      if not o["key"].endswith("/")
     ]
   if not objects:
     raise EOSVCError(f"Nothing found at s3://{bucket}/{file_key} or s3://{bucket}/{dir_prefix}")
@@ -206,41 +215,3 @@ def s3_upload_path(client, bucket, repo_prefix, src_path, repo_dir):
           client.upload_file(str(file_path), bucket, key, Callback=cb)
       except (BotoCoreError, ClientError) as e:
         raise EOSVCError(f"S3 upload failed {file_path} -> s3://{bucket}/{key}: {e}") from e
-
-
-def s3_print_tree(keys, base_prefix):
-  """Print S3 keys under base_prefix as an ASCII directory tree.
-
-  Args:
-      keys: List of S3 key strings.
-      base_prefix: The prefix to strip from keys before rendering.
-  """
-  base_prefix = base_prefix.rstrip("/") + "/"
-  rels = []
-  for k in keys:
-    if k.startswith(base_prefix):
-      rel = k[len(base_prefix) :].lstrip("/")
-      if rel:
-        rels.append(rel)
-
-  if not rels:
-    logger.info("(empty)")
-    return
-
-  tree = {}
-  for rel in rels:
-    parts = [p for p in rel.split("/") if p]
-    node = tree
-    for p in parts[:-1]:
-      node = node.setdefault(p, {})
-    node.setdefault(parts[-1], {})
-
-  def walk(node, prefix=""):
-    items = sorted(node.items(), key=lambda x: x[0])
-    for i, (name, child) in enumerate(items):
-      last = i == len(items) - 1
-      logger.info(prefix + ("└── " if last else "├── ") + name)
-      if child:
-        walk(child, prefix + ("    " if last else "│   "))
-
-  walk(tree)
