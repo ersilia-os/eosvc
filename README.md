@@ -1,6 +1,6 @@
 # Ersilia Version Control
 
-EOSVC is a small CLI for syncing large artifacts to **S3**, while your code remains in **Git**.
+EOSVC is a small CLI for syncing large artifacts to **S3**, while your code remains in **Git**. It uploads and downloads with live progress, shows a colored **local ↔ remote diff** (`view`), and can **delete** remote artifacts with explicit, guarded confirmation.
 
 EOSVC supports two repo types (detected from `access.json`):
 - **Standard repos**: manage `data/` and `output/`
@@ -88,6 +88,23 @@ Download data from S3 into a local directory:
 eosvc download --path <path-to-data-to-download>
 ```
 
+`upload` and `download` show live progress: a Rich progress bar (with size, speed and ETA) when run in a terminal, and one line per file when output is piped or redirected.
+
+### View Differences
+
+Compare your local working tree against S3 and see exactly what is in sync, modified, local-only, or remote-only:
+```bash
+eosvc view
+eosvc view --path data
+```
+
+### Delete Remote Data
+
+Remove artifacts from S3 (this only affects the remote copy — your local files are never touched):
+```bash
+eosvc delete --path <path-to-delete-remotely>
+```
+
 ## Technical Details
 
 ## What EOSVC stores where
@@ -149,7 +166,7 @@ Rules:
 
 * **Read from `eosvc-public` or `eosvc-models-public` may work without AWS credentials** (unsigned S3 client).
 * **Read from `eosvc-private` or `eosvc-models-private` requires AWS credentials**.
-* **Any upload requires AWS credentials**, regardless of bucket.
+* **Any upload or delete requires AWS credentials**, regardless of bucket. Deleting also requires `s3:DeleteObject` on the target bucket.
 
 > Note: For unauthenticated reads to work, the public bucket policy must allow `s3:GetObject`.
 > For unauthenticated `view` to work, it must also allow `s3:ListBucket` constrained to the relevant prefixes.
@@ -268,9 +285,9 @@ eosvc config \
   --default-region "eu-central-2"
 ```
 
-### view (S3 tree)
+### view (local ↔ remote diff)
 
-View the artifact layout in S3:
+`view` compares your **local working tree** against **S3** (by file size) and prints a colored, merged tree+table per managed category, with columns **Path / Status / Local / Remote / Uploaded**:
 
 ```bash
 eosvc view
@@ -280,7 +297,25 @@ eosvc view --path model/checkpoints
 eosvc view --path model/framework/fit
 eosvc view --path checkpoints
 eosvc view --path fit
+eosvc view --max-depth 1
 ```
+
+Each file is classified by status (shown in the legend):
+
+| Status | Meaning |
+|---|---|
+| `= both (same size)` | present locally and remotely with the same size |
+| `~ both (modified)` | present in both, sizes differ |
+| `+ local only` | present locally only (would be uploaded) |
+| `- remote only` | present in S3 only (would be downloaded) |
+
+Additional cues to make exploration fast:
+
+* a per-category header with a sync dot (**green** = everything in sync, **yellow** = differences), the file count, and total local/remote sizes — with size **units color-graded** by magnitude (`B`→`KB`→`MB`→`GB`→`TB`);
+* **per-folder rollups** on directory rows (e.g. `1+ 1- 2~ 3=` plus the folder's byte totals);
+* a **grand summary** line across all categories (`Summary: N differ · M same size across K categories`).
+
+Use `--max-depth N` to collapse folders deeper than `N` into a single rollup row for a quick overview.
 
 ### download
 
@@ -307,6 +342,29 @@ eosvc upload --path model/framework/fit/test-fit
 eosvc upload --path checkpoints/test-run
 eosvc upload --path fit/test-fit
 ```
+
+### delete
+
+Delete a file or folder from S3 (**remote only** — your local files are never touched). This is a destructive action, so `delete` is deliberately careful:
+
+```bash
+eosvc delete --path data/old_file.csv
+eosvc delete --path data
+eosvc delete --path .          # all managed artifacts
+```
+
+Before anything is removed, `delete`:
+
+1. prints a **red preview** of exactly which remote objects (and total size) will be deleted;
+2. shows a **destructive-action warning** — these artifacts are shared, so coordinate with your teammates first, and remember only the remote copy is affected;
+3. requires a **typed confirmation** — you type the **path** for a subpath delete, or the **repository name** for `eosvc delete --path .`.
+
+Flags:
+
+* `--yes` — skip the interactive confirmation (the warning is still shown). Required for non-interactive/scripted use; without it, `delete` refuses to run when there is no terminal.
+* `--max-depth N` — limit the depth of the preview tree (deeper folders are collapsed to a rollup).
+
+`delete` always requires AWS credentials and `s3:DeleteObject` on the target bucket, regardless of whether the bucket is public or private.
 
 ---
 
@@ -359,6 +417,10 @@ If you want unauthenticated `view` to work:
 * restrict with `s3:prefix` conditions for your repo prefixes
 
 For **model repos** (`eosvc-models-public`), apply the same policy to `arn:aws:s3:::eosvc-models-public`.
+
+### “AccessDenied” when deleting
+
+`delete` requires `s3:DeleteObject` on the target bucket. If your principal lacks it, the error includes the credential source and principal so you can fix the IAM policy (or use a different profile).
 
 ### “AWS credentials are missing or invalid”
 
