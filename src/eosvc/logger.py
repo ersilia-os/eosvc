@@ -1,45 +1,46 @@
-import contextlib
-
-from loguru import logger as _loguru
 from rich.console import Console
-from rich.logging import RichHandler
+from rich.text import Text
 
 
 class Logger:
-  """Thin wrapper around loguru that routes output through Rich for formatted terminal output."""
+  """Pretty, level-free console output.
+
+  Routes everything through a shared Rich Console. There are no log levels,
+  prefixes, or timestamps — just clean styled lines:
+    - info:    plain text
+    - success: green ✓
+    - warning: yellow ⚠
+    - error:   red ✗
+    - debug:   dim, only when verbose
+
+  Messages are rendered as Rich Text (markup disabled) so that content like
+  "[3/12]" or bracketed paths prints literally instead of being parsed as markup.
+  Use `logger.console.print(...)` directly when you do want Rich markup/renderables.
+  """
 
   def __init__(self):
-    _loguru.remove()
     self.console = Console()
-    self._sink_id = None
-    self.set_verbosity(True)
+    self._verbose = True
 
   def set_verbosity(self, verbose):
-    """Enable or disable log output. When disabled, all log calls are silenced."""
-    if self._sink_id is not None:
-      with contextlib.suppress(Exception):
-        _loguru.remove(self._sink_id)
-      self._sink_id = None
-    if verbose:
-      handler = RichHandler(
-        rich_tracebacks=True, markup=True, show_path=False, log_time_format="%H:%M:%S"
-      )
-      self._sink_id = _loguru.add(handler, format="{message}", colorize=True)
+    """Toggle non-essential (debug) output. Kept for backwards compatibility."""
+    self._verbose = bool(verbose)
 
   def debug(self, msg):
-    _loguru.debug(msg)
+    if self._verbose:
+      self.console.print(Text(str(msg), style="dim"))
 
   def info(self, msg):
-    _loguru.info(msg)
+    self.console.print(Text(str(msg)))
 
   def warning(self, msg):
-    _loguru.warning(msg)
+    self.console.print(Text.assemble(("⚠ ", "yellow"), (str(msg), "yellow")))
 
   def error(self, msg):
-    _loguru.error(msg)
+    self.console.print(Text.assemble(("✗ ", "red"), (str(msg), "red")))
 
   def success(self, msg):
-    _loguru.success(msg)
+    self.console.print(Text.assemble(("✓ ", "green"), str(msg)))
 
 
 logger = Logger()

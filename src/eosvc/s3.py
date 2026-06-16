@@ -134,6 +134,76 @@ def s3_list_objects(client, bucket, prefix):
   return objects
 
 
+def s3_resolve_keys(client, bucket, repo_prefix, rel_path):
+  """Resolve a repo-relative path to the S3 objects it points at.
+
+  Tries rel_path as an exact key first; if not found, treats it as a directory
+  prefix. This mirrors the resolution in s3_download_path and is the single source
+  of truth for "what does this path point at" (used by both the delete preview and
+  the deletion itself).
+
+  Args:
+      client: Boto3 S3 client.
+      bucket: S3 bucket name.
+      repo_prefix: Repo-level S3 prefix (i.e. the repo name).
+      rel_path: Relative path within the repo (e.g. 'data/inputs/file.csv').
+
+  Returns:
+      List of object dicts ({key, size, last_modified}); empty if nothing matches.
+
+  Raises:
+      EOSVCError: On S3 API errors.
+  """
+  rel_path = rel_path.strip().lstrip("/")
+  base = repo_prefix.rstrip("/") + "/"
+  file_key = base + rel_path
+  dir_prefix = base + rel_path.rstrip("/") + "/"
+
+  exact = [o for o in s3_list_objects(client, bucket, file_key) if o["key"] == file_key]
+  if exact:
+    return exact
+  return [o for o in s3_list_objects(client, bucket, dir_prefix) if not o["key"].endswith("/")]
+
+
+def s3_delete_keys(client, bucket, keys):
+  """Delete the given S3 keys in batches, returning the number deleted.
+
+  Batches keys into groups of 1000 (the delete_objects limit) and logs progress.
+
+  Args:
+      client: Boto3 S3 client.
+      bucket: S3 bucket name.
+      keys: List of full S3 key strings to delete.
+
+  Returns:
+      Number of objects deleted.
+
+  Raises:
+      EOSVCError: If S3 reports any per-key error, or on S3 API errors.
+  """
+  deleted = 0
+  total = len(keys)
+  try:
+    for start in range(0, total, 1000):
+      batch = keys[start : start + 1000]
+      resp = client.delete_objects(
+        Bucket=bucket,
+        Delete={"Objects": [{"Key": k} for k in batch], "Quiet": True},
+      )
+      errors = resp.get("Errors") or []
+      if errors:
+        first = errors[0]
+        raise EOSVCError(
+          f"S3 delete failed s3://{bucket}/{first.get('Key')}: "
+          f"{first.get('Code')} {first.get('Message')}"
+        )
+      deleted += len(batch)
+      logger.info(f"Deleted {deleted}/{total} object(s)")
+  except (BotoCoreError, ClientError) as e:
+    raise EOSVCError(f"S3 error deleting from s3://{bucket}/: {e}") from e
+  return deleted
+
+
 def s3_download_path(client, bucket, repo_prefix, rel_path, repo_dir):
   """Download a single file or all files under a prefix from S3 to the local repo.
 

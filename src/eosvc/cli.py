@@ -1,6 +1,6 @@
 import argparse
 
-from eosvc.commands import cmd_config, cmd_download, cmd_upload, cmd_view
+from eosvc.commands import cmd_config, cmd_delete, cmd_download, cmd_upload, cmd_view
 from eosvc.constants import EOSVCError
 from eosvc.logger import logger
 
@@ -46,6 +46,27 @@ def build_parser():
     help="Limit tree depth; folders deeper than this are collapsed to a rollup. Default: unlimited.",
   )
   p_view.set_defaults(func=cmd_view)
+
+  p_del = sub.add_parser(
+    "delete", help="Delete a file/folder from S3 by relative path (remote only)"
+  )
+  p_del.add_argument(
+    "--path",
+    required=True,
+    help="Relative path within the repo to delete remotely (e.g. data/, output/results.csv). Use '.' to delete all managed directories.",
+  )
+  p_del.add_argument(
+    "--yes",
+    action="store_true",
+    help="Skip the interactive confirmation (the destructive warning is still shown). Required for non-interactive use.",
+  )
+  p_del.add_argument(
+    "--max-depth",
+    type=int,
+    default=None,
+    help="Limit the depth of the deletion preview tree; deeper folders are collapsed to a rollup.",
+  )
+  p_del.set_defaults(func=cmd_delete)
 
   return p
 

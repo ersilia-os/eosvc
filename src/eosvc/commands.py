@@ -1,6 +1,9 @@
 import subprocess
 from pathlib import Path
 
+from rich.panel import Panel
+from rich.text import Text
+
 from eosvc.constants import EOSVCError, BUCKET_PRIVATE
 from eosvc.credentials import CREDS, write_home_env
 from eosvc.logger import logger
@@ -19,13 +22,17 @@ from eosvc.s3 import (
   s3_download_path,
   s3_upload_path,
   s3_list_objects,
+  s3_resolve_keys,
+  s3_delete_keys,
 )
 from eosvc.view import (
   local_files_map,
   remote_files_map,
   diff_entries,
   render_diff_tree,
+  render_object_tree,
   print_legend,
+  human_size,
 )
 
 
@@ -239,3 +246,108 @@ def cmd_view(args):
     strip=rel_dir,
     max_depth=args.max_depth,
   )
+
+
+def _print_delete_warning(console, n_files, n_bytes):
+  """Print a bold-red destructive-action banner reminding the user to coordinate."""
+  body = Text()
+  body.append("⚠ DESTRUCTIVE: ", style="bold red")
+  body.append("this permanently removes ")
+  body.append(f"{n_files} file(s) ", style="bold")
+  body.append("(")
+  body.append_text(human_size(n_bytes))
+  body.append(") from S3.\n")
+  body.append(
+    "These artifacts are shared — coordinate with your teammates before deleting.\n",
+    style="yellow",
+  )
+  body.append("Local files are NOT affected; this only deletes the remote copy.", style="dim")
+  console.print()
+  console.print(Panel(body, border_style="red", title="[bold red]Delete[/bold red]", expand=False))
+
+
+def cmd_delete(args):
+  """Delete one or all artifact paths for the current repo from S3 (remote only).
+
+  Locates the repo root by searching for access.json upward from cwd. Shows exactly
+  what will be removed, warns loudly, and requires typed confirmation before deleting.
+  Local files are never touched. Use --path . to target all managed directories.
+  """
+  repo_dir = find_repo_root(Path.cwd())
+  policy, mode = load_access(repo_dir)
+  ensure_access_lock(repo_dir, policy, mode)
+  repo = repo_name(repo_dir)
+
+  rel_path_raw = (args.path or "").strip().lstrip("/")
+  bulk = rel_path_raw in {"", ".", "./"}
+
+  # Resolve targets up front (no deletion yet): list of (label, bucket, client, objects).
+  targets = []
+  if bulk:
+    for rel_dir, cat in artifacts_plan(mode):
+      bucket = policy.bucket_for(cat)
+      client = s3_for_write(bucket, repo_dir)
+      objects = s3_resolve_keys(client, bucket, repo, rel_dir)
+      targets.append((rel_dir, bucket, client, objects))
+    rel_path = None
+  else:
+    rel_path = normalize_user_path(rel_path_raw, mode)
+    cat = category_for_path(rel_path, mode)
+    bucket = policy.bucket_for(cat)
+    client = s3_for_write(bucket, repo_dir)
+    objects = s3_resolve_keys(client, bucket, repo, rel_path)
+    if not objects:
+      raise EOSVCError(f"Nothing found at s3://{bucket}/{repo}/{rel_path}")
+    targets.append((rel_path, bucket, client, objects))
+
+  # Preview everything that would be deleted.
+  total_files = 0
+  total_bytes = 0
+  for label, bucket, client, objects in targets:
+    n_files, n_bytes = render_object_tree(
+      logger.console,
+      f"WILL DELETE — {label}  (s3://{bucket}/{repo}/)",
+      objects,
+      f"{repo}/",
+      strip=label,
+      max_depth=args.max_depth,
+    )
+    total_files += n_files
+    total_bytes += n_bytes
+
+  if total_files == 0:
+    logger.console.print()
+    logger.console.print("Nothing to delete.")
+    return
+
+  _print_delete_warning(logger.console, total_files, total_bytes)
+
+  # Typed confirmation (path for a subpath delete, repo name for --path .).
+  if not args.yes:
+    if not logger.console.is_terminal:
+      raise EOSVCError("Refusing to delete without confirmation; run in a terminal or pass --yes.")
+    if bulk:
+      expected = repo
+      answer = logger.console.input(f"Type the repository name '{repo}' to confirm: ")
+    else:
+      expected = rel_path
+      answer = logger.console.input(f"Type the path '{rel_path}' to confirm: ")
+    if answer.strip() != expected:
+      logger.console.print("Aborted (confirmation did not match).")
+      return
+
+  # Delete.
+  deleted = 0
+  for label, bucket, client, objects in targets:
+    keys = [o["key"] for o in objects]
+    if not keys:
+      continue
+    logger.info(f"Deleting --path {label} from s3://{bucket}/{repo}/")
+    try:
+      deleted += s3_delete_keys(client, bucket, keys)
+    except EOSVCError as e:
+      if "AccessDenied" in str(e):
+        _, source, arn = CREDS.resolve(repo_dir=repo_dir, require=False)
+        raise EOSVCError(str(e) + f" (credentials source: {source}, principal: {arn})")
+      raise
+  logger.success(f"Deleted {deleted} object(s). Run 'eosvc view' to confirm.")

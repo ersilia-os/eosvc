@@ -173,6 +173,79 @@ def _counts_text(agg):
   return t
 
 
+def _obj_aggregate(node, parts, entry_by_path):
+  """Roll up (file_count, total_bytes) for all leaf descendants of a dir node."""
+  files = 0
+  total = 0
+  for name, child in node.items():
+    full = "/".join(parts + [name])
+    if child:
+      sub_files, sub_total = _obj_aggregate(child, parts + [name], entry_by_path)
+      files += sub_files
+      total += sub_total
+    else:
+      files += 1
+      total += entry_by_path[full]["size"] or 0
+  return files, total
+
+
+def render_object_tree(console, title, objects, base_prefix, strip=None, max_depth=None):
+  """Render a plain remote listing (no diff) as a red tree+table, for delete previews.
+
+  Returns (file_count, total_bytes) so the caller can build the warning text.
+  """
+  remote = remote_files_map(objects, base_prefix)
+  entries = [
+    {"rel": rel, "size": meta["size"], "last_modified": meta["last_modified"]}
+    for rel, meta in remote.items()
+  ]
+  total_files = len(entries)
+  total_bytes = sum(e["size"] or 0 for e in entries)
+
+  header = Text()
+  header.append(title, style="bold red")
+  header.append(f"  ·  {total_files} files · ")
+  header.append_text(human_size(total_bytes))
+  console.print()
+  console.print(header)
+
+  if not entries:
+    console.print("  [dim](empty)[/dim]")
+    return 0, 0
+
+  table = Table(box=box.SIMPLE, expand=False, pad_edge=False)
+  table.add_column("Path", no_wrap=True)
+  table.add_column("Size", justify="right", no_wrap=True)
+  table.add_column("Uploaded", no_wrap=True)
+
+  tree, entry_by_path = _build_tree(entries, strip)
+
+  def walk(node, parts, glyph_prefix):
+    depth = len(parts) + 1
+    items = sorted(node.items(), key=lambda x: x[0])
+    for i, (name, child) in enumerate(items):
+      last = i == len(items) - 1
+      branch = "└── " if last else "├── "
+      full = "/".join(parts + [name])
+      if child:
+        n_files, n_bytes = _obj_aggregate(child, parts + [name], entry_by_path)
+        collapsed = max_depth is not None and depth >= max_depth
+        name_text = Text(name + ("/ …" if collapsed else "/"), style="bold red")
+        name_text.append(f"  {n_files} files", style="dim")
+        path_cell = Text(glyph_prefix + branch, style="red") + name_text
+        table.add_row(path_cell, human_size(n_bytes), "")
+        if not collapsed:
+          walk(child, parts + [name], glyph_prefix + ("    " if last else "│   "))
+      else:
+        e = entry_by_path[full]
+        path_cell = Text(glyph_prefix + branch, style="red") + Text(name, style="red")
+        table.add_row(path_cell, human_size(e["size"]), fmt_date(e["last_modified"]))
+
+  walk(tree, [], "")
+  console.print(table)
+  return total_files, total_bytes
+
+
 def render_diff_tree(console, title, entries, strip=None, max_depth=None):
   """Render a merged tree+table diff of local vs remote for one category/path.
 
