@@ -21,5 +21,6 @@ EOSVC_HOME_ENV = EOSVC_HOME_DIR / ".config"
 
 
 class EOSVCError(RuntimeError):
-    """Base exception raised for all eosvc errors."""
-    pass
+  """Base exception raised for all eosvc errors."""
+
+  pass

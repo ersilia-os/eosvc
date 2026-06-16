@@ -19,22 +19,25 @@ def build_parser():
 
   p_dl = sub.add_parser("download", help="Download a file/folder from S3 by relative path")
   p_dl.add_argument(
-    "--path", required=True,
-    help="Relative path within the repo (e.g. data/, output/results.csv). Use '.' to download all managed directories."
+    "--path",
+    required=True,
+    help="Relative path within the repo (e.g. data/, output/results.csv). Use '.' to download all managed directories.",
   )
   p_dl.set_defaults(func=cmd_download)
 
   p_ul = sub.add_parser("upload", help="Upload a file/folder to S3 by relative path")
   p_ul.add_argument(
-    "--path", required=True,
-    help="Relative path within the repo (e.g. data/, output/results.csv). Use '.' to upload all managed directories."
+    "--path",
+    required=True,
+    help="Relative path within the repo (e.g. data/, output/results.csv). Use '.' to upload all managed directories.",
   )
   p_ul.set_defaults(func=cmd_upload)
 
   p_view = sub.add_parser("view", help="View S3 folder structure for a path")
   p_view.add_argument(
-    "--path", default=".",
-    help="Relative path to inspect. Defaults to '.' (all managed directories)."
+    "--path",
+    default=".",
+    help="Relative path to inspect. Defaults to '.' (all managed directories).",
   )
   p_view.set_defaults(func=cmd_view)
 
