@@ -1,18 +1,20 @@
 # Ersilia Version Control
 
-EOSVC is a small CLI for syncing large artifacts to **S3**, while your code remains in **Git**. It uploads and downloads with live progress, shows a colored **local ↔ remote diff** (`view`), and can **delete** remote artifacts with explicit, guarded confirmation.
+`eosvc` is a small CLI for syncing large artifacts to **S3**, while your code remains in **Git**. It uploads and downloads with live progress, shows a colored **local ↔ remote diff** (`view`), and can **delete** remote artifacts with explicit, guarded confirmation.
 
-EOSVC supports two repo types (detected from `access.json`):
-- **Standard repos**: manage `data/` and `output/`
-- **Model repos**: manage `model/checkpoints/` and `model/framework/fit/`
+`eosvc` supports two repo types (detected from `access.json`):
+* **Standard repos**: manage `data/` and `output/`
+* **Model repos**: manage `model/checkpoints/` and `model/framework/fit/`
 
-EOSVC **does not** manage Git operations anymore (no clone/pull/push). Use `git` directly for code workflows.
+The tool **does not** manage Git operations. Use `git` directly for code workflows.
 
 ---
+
 ## Quick Start
+
 ### Installation
 
-Clone the repository and install the package in editable mode:
+Clone the repository and install the package (in editable mode `-e`):
 
 ```bash
 git clone https://github.com/ersilia-os/eosvc.git
@@ -24,8 +26,8 @@ Verify that the CLI is available:
 
 ```bash
 eosvc --help
-
 ```
+
 ### AWS Credentials Setup
 
 #### 1. Create an AWS Access Key
@@ -33,10 +35,10 @@ eosvc --help
 Create an access key in AWS (IAM) for a user or role with permissions to access the target S3 bucket.
 
 You will need:
-- **Access Key ID**
-- **Secret Access Key**
-- **Session Token** (only if using temporary credentials)
-- **AWS Region** (example: `eu-central-2`)
+* **Access Key ID**
+* **Secret Access Key**
+* **Session Token** (only if using temporary credentials)
+* **AWS Region** (example: `eu-central-2`)
 
 #### 2. Configure EOSVC
 
@@ -62,12 +64,12 @@ Create or edit an `access.json` file in your working directory to define which f
   "output": "private"
 }
 ```
-- Files inside the data/ folder will be uploaded with public access.
-- Files inside the output/ folder will be uploaded with private access
+* Files inside the `data/` folder will be uploaded with public access.
+* Files inside the `output/` folder will be uploaded with private access.
 
 #### Git Ignore (Recommended)
 
-If you are working inside a git repository, prevent data folders from being committed by adding them to `.gitignore`:
+If you are working inside a git repository, prevent folders specified in `access.json` from being committed by adding them to `.gitignore`:
 
 ```gitignore
 data/
@@ -107,16 +109,16 @@ eosvc delete --path <path-to-delete-remotely>
 
 ## Technical Details
 
-## What EOSVC stores where
+### What `eosvc` stores where
 
-EOSVC syncs artifacts under an S3 prefix equal to the **repo name**.
+`eosvc` syncs artifacts under an S3 prefix equal to the **repo name**.
 
-By default, the repo name is the **local folder name** (repo directory basename).  
+By default, the repo name is the **local folder name** (repo directory base name).  
 If your folder name differs from the remote repo/S3 prefix, set:
 
 ```bash
 export EVC_REPO_NAME="my-actual-repo-name"
-````
+```
 
 ### Standard repos
 
@@ -147,7 +149,7 @@ S3 mapping for repo `my-model-repo`:
 * `s3://<bucket>/my-model-repo/model/checkpoints/...`
 * `s3://<bucket>/my-model-repo/model/framework/fit/...`
 
-In model repos, EOSVC refuses operations on `data/` and `output/`.
+In model repos, `eosvc` refuses operations on `data/` and `output/`.
 
 ---
 
@@ -170,18 +172,6 @@ Rules:
 
 > Note: For unauthenticated reads to work, the public bucket policy must allow `s3:GetObject`.
 > For unauthenticated `view` to work, it must also allow `s3:ListBucket` constrained to the relevant prefixes.
-
----
-
-## Installation
-
-```bash
-pip install -e .
-```
-
-```bash
-eosvc --help
-```
 
 ---
 
@@ -208,9 +198,9 @@ export AWS_SESSION_TOKEN="..."   # optional
 export AWS_REGION="eu-central-2"     # optional
 ```
 
-### Option B: EOSVC config (writes ~/.eosvc/.config)
+### Option B: EOSVC config (writes `~/.eosvc/.config`)
 
-EOSVC provides a `config` command to store credentials in:
+`eosvc` provides a `config` command to store credentials in:
 
 * `~/.eosvc/.config` (permissions set to `600` when possible)
 
@@ -224,7 +214,7 @@ eosvc config \
 
 This is similar in spirit to `aws configure`, but EOSVC writes a `.env` file and loads it alongside other sources.
 
-### Option C: local .env files
+### Option C: local `.env` files
 
 Create `.env` in the repo (or current directory):
 
@@ -232,15 +222,14 @@ Create `.env` in the repo (or current directory):
 AWS_ACCESS_KEY_ID="..."
 AWS_SECRET_ACCESS_KEY="..."
 AWS_SESSION_TOKEN="..."   # optional
-AWS_REGION="eu-central-2"    # optional
+AWS_REGION="eu-central-2" # optional
 ```
 
 ---
 
-## access.json (required)
+## The `access.json` file (required)
 
-EOSVC requires an `access.json` at the repo root.
-EOSVC identifies the repo root by searching upward for `access.json` starting from the current directory.
+`eosvc` requires an `access.json` at the repo root. The tool identifies the repo root by searching upward for `access.json` starting from the current directory.
 
 ### Standard repo `access.json`
 
@@ -295,8 +284,6 @@ eosvc view --path data
 eosvc view --path output
 eosvc view --path model/checkpoints
 eosvc view --path model/framework/fit
-eosvc view --path checkpoints
-eosvc view --path fit
 eosvc view --max-depth 1
 ```
 
@@ -368,67 +355,19 @@ Flags:
 
 ---
 
-## Quick Test
-
-From the project root:
-
-```bash
-cd tests
-chmod +x test.sh
-./test.sh
-```
-
-The test script:
-
-* uses `git clone` to obtain test repos
-* runs `view`, `upload`, and `download` for both model and standard repos
-
----
-
 ## Access lock (no public/private migration)
 
-EOSVC creates a local lock file:
+`eosvc` creates a local lock file:
 
 * `.eosvc/access.lock.json`
 
-If you later change `access.json` (e.g., `public` → `private`), EOSVC will refuse to run.
+If you later change `access.json` (e.g., `public` → `private`), `eosvc` will refuse to run.
 
 To override (not recommended), delete the lock file manually:
 
 ```bash
 rm .eosvc/access.lock.json
 ```
-
----
-
-## Common troubleshooting
-
-### “AccessDenied” when reading a public bucket without creds
-
-Your bucket policy probably does not allow anonymous access for the prefixes EOSVC uses.
-
-For **standard repos** (`eosvc-public`), if you want unauthenticated `download` to work:
-
-* allow `s3:GetObject` on `arn:aws:s3:::eosvc-public/*`
-
-If you want unauthenticated `view` to work:
-
-* also allow `s3:ListBucket` on `arn:aws:s3:::eosvc-public`
-* restrict with `s3:prefix` conditions for your repo prefixes
-
-For **model repos** (`eosvc-models-public`), apply the same policy to `arn:aws:s3:::eosvc-models-public`.
-
-### “AccessDenied” when deleting
-
-`delete` requires `s3:DeleteObject` on the target bucket. If your principal lacks it, the error includes the credential source and principal so you can fix the IAM policy (or use a different profile).
-
-### “AWS credentials are missing or invalid”
-
-Provide credentials via:
-
-* env vars, or
-* `eosvc config` (writes `~/.eosvc/.config`), or
-* a `.env` file in the repo/current directory or its `.config/` subdirectory
 
 ---
 
