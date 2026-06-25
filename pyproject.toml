@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eosvc"
-version = "1.0.1"
+version = "1.2.0"
 description = "EOSVC (Ersilia Version Control) is a Python-based tool designed to unify code versioning with data and result management by combining Git and S3 workflows around the main branch. "
 readme = "README.md"
 license = {file = "LICENSE"}
